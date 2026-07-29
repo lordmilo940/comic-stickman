@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Comic Stickman Run</title>
+    <title>Comic Stickman Run - Night Edition</title>
     <style>
-        /* Estilo general con estética de Cómic */
+        /* Estilo general con estética de Cómic Nocturno */
         body {
             margin: 0;
-            background-color: #f0f0f0;
+            background-color: #0d1117;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -20,9 +20,9 @@
             text-align: center;
         }
         canvas {
-            background-color: #f7eedb;
+            background-color: #1a1c2e; /* Cielo azul oscuro de noche */
             border: 6px solid #000000;
-            box-shadow: 8px 8px 0px #000000;
+            box-shadow: 8px 8px 0px #ffcc00; /* Sombra amarilla estilo pop-art */
             display: block;
         }
         .instructions {
@@ -30,6 +30,7 @@
             font-size: 20px;
             text-transform: uppercase;
             letter-spacing: 1px;
+            color: #ffffff;
         }
     </style>
 </head>
@@ -49,7 +50,7 @@ let score = 0;
 let gameOver = false;
 let gameSpeed = 5;
 
-// Propiedades del Stickman (Estilo dibujo a mano)
+// Propiedades del Stickman (Cabeza blanca y cara de cómic)
 const stickman = {
     x: 80,
     y: 200,
@@ -61,11 +62,11 @@ const stickman = {
     isGrounded: false
 };
 
-// Lista de obstáculos (Cajas / Hidrantes estilo cómic)
+// Lista de obstáculos (Cajas naranjas fluorescentes)
 let obstacles = [];
 let spawnTimer = 0;
 
-// Escenario: Siluetas de fondo de la ciudad
+// Escenario: Siluetas de edificios nocturnos
 const buildings = [
     {x: 50, w: 80, h: 150},
     {x: 200, w: 120, h: 200},
@@ -103,21 +104,32 @@ function resetGame() {
 function update() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // 1. DIBUJAR FONDO ESTILO CÓMIC (Ciudad)
-    ctx.fillStyle = "#e0d0b0";
+    // 1. DIBUJAR EDIFICIOS DE NOCHE CON VENTANAS
+    ctx.fillStyle = "#2d3250"; // Edificios gris azulado oscuro
     buildings.forEach(b => {
         b.x -= gameSpeed * 0.2; // Efecto parallax lento
         if (b.x + b.w < 0) b.x = canvas.width;
         
-        // Relleno del edificio
+        // Relleno y borde del edificio
         ctx.fillRect(b.x, canvas.height - b.h, b.w, b.h);
-        // Borde grueso de cómic
         ctx.lineWidth = 3;
         ctx.strokeStyle = "#000000";
         ctx.strokeRect(b.x, canvas.height - b.h, b.w, b.h);
+
+        // Ventanas iluminadas (Cuadrados amarillos estilo cómic)
+        ctx.fillStyle = "#ffdf6d";
+        if (b.h > 140) {
+            ctx.fillRect(b.x + 15, canvas.height - b.h + 20, 15, 15);
+            ctx.fillRect(b.x + b.w - 30, canvas.height - b.h + 20, 15, 15);
+            ctx.fillRect(b.x + 15, canvas.height - b.h + 60, 15, 15);
+            ctx.fillRect(b.x + b.w - 30, canvas.height - b.h + 60, 15, 15);
+        }
+        ctx.fillStyle = "#2d3250"; // Reset para el siguiente edificio
     });
 
-    // Línea del suelo
+    // Línea del suelo oscuro
+    ctx.fillStyle = "#14151f";
+    ctx.fillRect(0, 260, canvas.width, 40);
     ctx.beginPath();
     ctx.moveTo(0, 260);
     ctx.lineTo(canvas.width, 260);
@@ -136,7 +148,7 @@ function update() {
             stickman.isGrounded = true;
         }
 
-        // Generar nuevos obstáculos de forma aleatoria
+        // Generar nuevos obstáculos
         spawnTimer++;
         if (spawnTimer > Math.random() * 40 + 70) {
             obstacles.push({
@@ -149,42 +161,40 @@ function update() {
         }
 
         score++;
-        if (score % 500 === 0) gameSpeed += 1; // Aumenta dificultad
+        if (score % 500 === 0) gameSpeed += 1;
     }
 
-  // 3. DIBUJAR STICKMAN (Cabeza blanca con cara de cómic)
+    // 3. DIBUJAR STICKMAN (Cabeza blanca con cara de cómic)
     ctx.lineWidth = 4;
     ctx.strokeStyle = "#000000";
 
     let cx = stickman.x + 15;
     let cy = stickman.y + 15;
 
-    // Cabeza (Ahora rellena de blanco con borde negro grueso)
+    // Cabeza (Blanca)
     ctx.fillStyle = "#FFFFFF"; 
     ctx.beginPath();
-    ctx.arc(cx, cy, 12, 0, Math.PI * 2); // Un poco más grande para que quepa la cara
+    ctx.arc(cx, cy, 12, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Ojos estilo cómic (Dos puntos negros)
+    // Ojos (Negros)
     ctx.fillStyle = "#000000";
     ctx.beginPath();
-    ctx.arc(cx + 4, cy - 3, 2, 0, Math.PI * 2); // Ojo derecho
-    ctx.arc(cx - 2, cy - 3, 2, 0, Math.PI * 2); // Ojo izquierdo
+    ctx.arc(cx + 4, cy - 3, 2, 0, Math.PI * 2);
+    ctx.arc(cx - 2, cy - 3, 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Boca (Línea de velocidad/esfuerzo)
+    // Boca dinámica
     ctx.beginPath();
     if (stickman.isGrounded) {
-        // Boca sonriente/esfuerzo al correr
-        ctx.arc(cx + 1, cy + 3, 4, 0, Math.PI); 
+        ctx.arc(cx + 1, cy + 3, 4, 0, Math.PI); // Sonrisa corriendo
     } else {
-        // Boca abierta de sorpresa (O) al saltar
-        ctx.arc(cx + 1, cy + 4, 3, 0, Math.PI * 2);
+        ctx.arc(cx + 1, cy + 4, 3, 0, Math.PI * 2); // Expresión de sorpresa al saltar
     }
     ctx.stroke();
 
-    // Cuerpo (Líneas negras)
+    // Cuerpo (Líneas negras gruesas)
     ctx.fillStyle = "#000000";
     ctx.beginPath();
     ctx.moveTo(cx, cy + 12);
@@ -222,28 +232,27 @@ function update() {
         ctx.lineTo(cx + 12, cy + 48);
     }
     ctx.stroke();
+
     // 4. ACTUALIZAR Y DIBUJAR OBSTÁCULOS
     obstacles.forEach((obs, index) => {
         if (!gameOver) obs.x -= gameSpeed;
 
-        // Dibujar obstáculo (Caja naranja estilo cómic)
+        // Dibujar obstáculo (Caja naranja de cómic)
         ctx.fillStyle = "#ff5722";
         ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
         ctx.lineWidth = 4;
         ctx.strokeStyle = "#000000";
         ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
         
-        // Detalle de cruz en la caja cómic
         ctx.beginPath();
         ctx.moveTo(obs.x, obs.y); ctx.lineTo(obs.x + obs.width, obs.y + obs.height);
         ctx.moveTo(obs.x + obs.width, obs.y); ctx.lineTo(obs.x, obs.y + obs.height);
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Eliminar obstáculos viejos
         if (obs.x + obs.width < 0) obstacles.splice(index, 1);
 
-        // DETECCIÓN DE COLISIÓN
+        // Colisión
         if (
             stickman.x < obs.x + obs.width &&
             stickman.x + stickman.width > obs.x &&
@@ -254,16 +263,16 @@ function update() {
         }
     });
 
-    // 5. TEXTOS EN PANTALLA (Marcador y Game Over)
-    ctx.fillStyle = "#000000";
+    // 5. TEXTOS EN PANTALLA (Marcador brillante)
+    ctx.fillStyle = "#ffcc00";
     ctx.font = "24px 'Impact'";
     ctx.fillText("SCORE: " + score, 20, 40);
 
     if (gameOver) {
-        ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Cartel de GAME OVER estilo cómic pop-art
+        // Cartel Pop-Art de Fin del Juego
         ctx.fillStyle = "#ffeb3b";
         ctx.fillRect(250, 90, 300, 110);
         ctx.lineWidth = 5;
@@ -278,7 +287,7 @@ function update() {
         ctx.fillStyle = "#000000";
         ctx.font = "18px 'Arial Black'";
         ctx.fillText("TOCA PARA REINICIAR", canvas.width / 2, 180);
-        ctx.textAlign = "start"; // Reset
+        ctx.textAlign = "start";
     }
 
     requestAnimationFrame(update);
