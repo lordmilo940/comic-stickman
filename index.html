@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Comic Stickman Run - Night Edition</title>
+    <title>Comic Stickman Run - Hydrant Edition</title>
     <style>
         /* Estilo general con estética de Cómic Nocturno */
         body {
@@ -62,7 +62,7 @@ const stickman = {
     isGrounded: false
 };
 
-// Lista de obstáculos (Cajas naranjas fluorescentes)
+// Lista de obstáculos (Hidrantes de agua)
 let obstacles = [];
 let spawnTimer = 0;
 
@@ -153,9 +153,9 @@ function update() {
         if (spawnTimer > Math.random() * 40 + 70) {
             obstacles.push({
                 x: canvas.width,
-                y: 220,
-                width: 25,
-                height: 40
+                y: 215, // Un poco más arriba para ajustarse al hidrante
+                width: 26,
+                height: 45
             });
             spawnTimer = 0;
         }
@@ -233,26 +233,48 @@ function update() {
     }
     ctx.stroke();
 
-    // 4. ACTUALIZAR Y DIBUJAR OBSTÁCULOS
+    // 4. ACTUALIZAR Y DIBUJAR HIDRANTES DE AGUA
     obstacles.forEach((obs, index) => {
         if (!gameOver) obs.x -= gameSpeed;
 
-        // Dibujar obstáculo (Caja naranja de cómic)
-        ctx.fillStyle = "#ff5722";
-        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 3;
         ctx.strokeStyle = "#000000";
-        ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
-        
+
+        // Cuerpo principal del hidrante (Rojo)
+        ctx.fillStyle = "#d32f2f";
+        ctx.fillRect(obs.x + 3, obs.y + 10, obs.width - 6, obs.height - 10);
+        ctx.strokeRect(obs.x + 3, obs.y + 10, obs.width - 6, obs.height - 10);
+
+        // Sombrero/Tapa redonda superior
         ctx.beginPath();
-        ctx.moveTo(obs.x, obs.y); ctx.lineTo(obs.x + obs.width, obs.y + obs.height);
-        ctx.moveTo(obs.x + obs.width, obs.y); ctx.lineTo(obs.x, obs.y + obs.height);
-        ctx.lineWidth = 2;
+        ctx.arc(obs.x + obs.width / 2, obs.y + 10, obs.width / 2 - 2, Math.PI, 0);
+        ctx.fill();
         ctx.stroke();
+
+        // Tuerca superior dorada
+        ctx.fillStyle = "#fbc02d";
+        ctx.fillRect(obs.x + obs.width / 2 - 3, obs.y, 6, 4);
+        ctx.strokeRect(obs.x + obs.width / 2 - 3, obs.y, 6, 4);
+
+        // Boquillas laterales (Salidas de agua)
+        ctx.fillStyle = "#fbc02d";
+        ctx.fillRect(obs.x, obs.y + 18, 4, 8); // Izquierda
+        ctx.strokeRect(obs.x, obs.y + 18, 4, 8);
+        ctx.fillRect(obs.x + obs.width - 4, obs.y + 18, 4, 8); // Derecha
+        ctx.strokeRect(obs.x + obs.width - 4, obs.y + 18, 4, 8);
+
+        // Boquilla central
+        ctx.fillRect(obs.x + obs.width / 2 - 4, obs.y + 20, 8, 8);
+        ctx.strokeRect(obs.x + obs.width / 2 - 4, obs.y + 20, 8, 8);
+
+        // Base del hidrante
+        ctx.fillStyle = "#555555";
+        ctx.fillRect(obs.x, obs.y + obs.height - 5, obs.width, 5);
+        ctx.strokeRect(obs.x, obs.y + obs.height - 5, obs.width, 5);
 
         if (obs.x + obs.width < 0) obstacles.splice(index, 1);
 
-        // Colisión
+        // Colisión exacta contra el hidrante
         if (
             stickman.x < obs.x + obs.width &&
             stickman.x + stickman.width > obs.x &&
