@@ -152,24 +152,45 @@ function update() {
         if (score % 500 === 0) gameSpeed += 1; // Aumenta dificultad
     }
 
-    // 3. DIBUJAR STICKMAN (Animación básica de correr/saltar con líneas)
+  // 3. DIBUJAR STICKMAN (Cabeza blanca con cara de cómic)
     ctx.lineWidth = 4;
     ctx.strokeStyle = "#000000";
-    ctx.fillStyle = "#000000";
 
     let cx = stickman.x + 15;
     let cy = stickman.y + 15;
 
-    // Cabeza
+    // Cabeza (Ahora rellena de blanco con borde negro grueso)
+    ctx.fillStyle = "#FFFFFF"; 
     ctx.beginPath();
-    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 12, 0, Math.PI * 2); // Un poco más grande para que quepa la cara
     ctx.fill();
     ctx.stroke();
-    // Cuerpo
+
+    // Ojos estilo cómic (Dos puntos negros)
+    ctx.fillStyle = "#000000";
     ctx.beginPath();
-    ctx.moveTo(cx, cy + 10);
+    ctx.arc(cx + 4, cy - 3, 2, 0, Math.PI * 2); // Ojo derecho
+    ctx.arc(cx - 2, cy - 3, 2, 0, Math.PI * 2); // Ojo izquierdo
+    ctx.fill();
+
+    // Boca (Línea de velocidad/esfuerzo)
+    ctx.beginPath();
+    if (stickman.isGrounded) {
+        // Boca sonriente/esfuerzo al correr
+        ctx.arc(cx + 1, cy + 3, 4, 0, Math.PI); 
+    } else {
+        // Boca abierta de sorpresa (O) al saltar
+        ctx.arc(cx + 1, cy + 4, 3, 0, Math.PI * 2);
+    }
+    ctx.stroke();
+
+    // Cuerpo (Líneas negras)
+    ctx.fillStyle = "#000000";
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + 12);
     ctx.lineTo(cx, cy + 35);
     ctx.stroke();
+
     // Brazos
     ctx.beginPath();
     if (stickman.isGrounded) {
@@ -178,13 +199,14 @@ function update() {
         ctx.lineTo(cx - 10, cy + 25 + armWave);
         ctx.moveTo(cx, cy + 15);
         ctx.lineTo(cx + 15, cy + 25 - armWave);
-    } else { // Brazos arriba al saltar
+    } else {
         ctx.moveTo(cx, cy + 15);
         ctx.lineTo(cx - 12, cy);
         ctx.moveTo(cx, cy + 15);
         ctx.lineTo(cx + 12, cy);
     }
     ctx.stroke();
+
     // Piernas
     ctx.beginPath();
     if (stickman.isGrounded) {
@@ -193,14 +215,13 @@ function update() {
         ctx.lineTo(cx - 10 + legMove, cy + 60);
         ctx.moveTo(cx, cy + 35);
         ctx.lineTo(cx + 10 - legMove, cy + 60);
-    } else { // Piernas encogidas al saltar
+    } else {
         ctx.moveTo(cx, cy + 35);
         ctx.lineTo(cx - 8, cy + 50);
         ctx.moveTo(cx, cy + 35);
         ctx.lineTo(cx + 12, cy + 48);
     }
     ctx.stroke();
-
     // 4. ACTUALIZAR Y DIBUJAR OBSTÁCULOS
     obstacles.forEach((obs, index) => {
         if (!gameOver) obs.x -= gameSpeed;
