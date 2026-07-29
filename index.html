@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comic Stickman Run</title>
+    <style>
+        /* Estilo general con estética de Cómic */
+        body {
+            margin: 0;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            overflow: hidden;
+        }
+        #gameContainer {
+            text-align: center;
+        }
+        canvas {
+            background-color: #f7eedb;
+            border: 6px solid #000000;
+            box-shadow: 8px 8px 0px #000000;
+            display: block;
+        }
+        .instructions {
+            margin-top: 15px;
+            font-size: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="300"></canvas>
+    <div class="instructions">Presiona ESPACIO o TOCA LA PANTALLA para Saltar</div>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+// Configuración del juego
+let score = 0;
+let gameOver = false;
+let gameSpeed = 5;
+
+// Propiedades del Stickman (Estilo dibujo a mano)
+const stickman = {
+    x: 80,
+    y: 200,
+    width: 30,
+    height: 60,
+    vy: 0,
+    gravity: 0.6,
+    jumpForce: -12,
+    isGrounded: false
+};
+
+// Lista de obstáculos (Cajas / Hidrantes estilo cómic)
+let obstacles = [];
+let spawnTimer = 0;
+
+// Escenario: Siluetas de fondo de la ciudad
+const buildings = [
+    {x: 50, w: 80, h: 150},
+    {x: 200, w: 120, h: 200},
+    {x: 400, w: 70, h: 120},
+    {x: 550, w: 100, h: 180},
+    {x: 750, w: 90, h: 160}
+];
+
+// Captura de controles (Teclado y Táctil)
+window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") jump();
+});
+canvas.addEventListener("touchstart", jump);
+
+function jump() {
+    if (stickman.isGrounded && !gameOver) {
+        stickman.vy = stickman.jumpForce;
+        stickman.isGrounded = false;
+    }
+    if (gameOver) {
+        resetGame();
+    }
+}
+
+function resetGame() {
+    score = 0;
+    obstacles = [];
+    gameSpeed = 5;
+    gameOver = false;
+    stickman.y = 200;
+    stickman.vy = 0;
+}
+
+// Bucle principal del juego
+function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. DIBUJAR FONDO ESTILO CÓMIC (Ciudad)
+    ctx.fillStyle = "#e0d0b0";
+    buildings.forEach(b => {
+        b.x -= gameSpeed * 0.2; // Efecto parallax lento
+        if (b.x + b.w < 0) b.x = canvas.width;
+        
+        // Relleno del edificio
+        ctx.fillRect(b.x, canvas.height - b.h, b.w, b.h);
+        // Borde grueso de cómic
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#000000";
+        ctx.strokeRect(b.x, canvas.height - b.h, b.w, b.h);
+    });
+
+    // Línea del suelo
+    ctx.beginPath();
+    ctx.moveTo(0, 260);
+    ctx.lineTo(canvas.width, 260);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#000000";
+    ctx.stroke();
+
+    if (!gameOver) {
+        // 2. FÍSICA DEL STICKMAN
+        stickman.vy += stickman.gravity;
+        stickman.y += stickman.vy;
+
+        if (stickman.y >= 200) {
+            stickman.y = 200;
+            stickman.vy = 0;
+            stickman.isGrounded = true;
+        }
+
+        // Generar nuevos obstáculos de forma aleatoria
+        spawnTimer++;
+        if (spawnTimer > Math.random() * 40 + 70) {
+            obstacles.push({
+                x: canvas.width,
+                y: 220,
+                width: 25,
+                height: 40
+            });
+            spawnTimer = 0;
+        }
+
+        score++;
+        if (score % 500 === 0) gameSpeed += 1; // Aumenta dificultad
+    }
+
+    // 3. DIBUJAR STICKMAN (Animación básica de correr/saltar con líneas)
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#000000";
+    ctx.fillStyle = "#000000";
+
+    let cx = stickman.x + 15;
+    let cy = stickman.y + 15;
+
+    // Cabeza
+    ctx.beginPath();
+    ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Cuerpo
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + 10);
+    ctx.lineTo(cx, cy + 35);
+    ctx.stroke();
+    // Brazos
+    ctx.beginPath();
+    if (stickman.isGrounded) {
+        let armWave = Math.sin(score * 0.15) * 10;
+        ctx.moveTo(cx, cy + 15);
+        ctx.lineTo(cx - 10, cy + 25 + armWave);
+        ctx.moveTo(cx, cy + 15);
+        ctx.lineTo(cx + 15, cy + 25 - armWave);
+    } else { // Brazos arriba al saltar
+        ctx.moveTo(cx, cy + 15);
+        ctx.lineTo(cx - 12, cy);
+        ctx.moveTo(cx, cy + 15);
+        ctx.lineTo(cx + 12, cy);
+    }
+    ctx.stroke();
+    // Piernas
+    ctx.beginPath();
+    if (stickman.isGrounded) {
+        let legMove = Math.sin(score * 0.2) * 15;
+        ctx.moveTo(cx, cy + 35);
+        ctx.lineTo(cx - 10 + legMove, cy + 60);
+        ctx.moveTo(cx, cy + 35);
+        ctx.lineTo(cx + 10 - legMove, cy + 60);
+    } else { // Piernas encogidas al saltar
+        ctx.moveTo(cx, cy + 35);
+        ctx.lineTo(cx - 8, cy + 50);
+        ctx.moveTo(cx, cy + 35);
+        ctx.lineTo(cx + 12, cy + 48);
+    }
+    ctx.stroke();
+
+    // 4. ACTUALIZAR Y DIBUJAR OBSTÁCULOS
+    obstacles.forEach((obs, index) => {
+        if (!gameOver) obs.x -= gameSpeed;
+
+        // Dibujar obstáculo (Caja naranja estilo cómic)
+        ctx.fillStyle = "#ff5722";
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "#000000";
+        ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+        
+        // Detalle de cruz en la caja cómic
+        ctx.beginPath();
+        ctx.moveTo(obs.x, obs.y); ctx.lineTo(obs.x + obs.width, obs.y + obs.height);
+        ctx.moveTo(obs.x + obs.width, obs.y); ctx.lineTo(obs.x, obs.y + obs.height);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Eliminar obstáculos viejos
+        if (obs.x + obs.width < 0) obstacles.splice(index, 1);
+
+        // DETECCIÓN DE COLISIÓN
+        if (
+            stickman.x < obs.x + obs.width &&
+            stickman.x + stickman.width > obs.x &&
+            stickman.y < obs.y + obs.height &&
+            stickman.y + stickman.height > obs.y
+        ) {
+            gameOver = true;
+        }
+    });
+
+    // 5. TEXTOS EN PANTALLA (Marcador y Game Over)
+    ctx.fillStyle = "#000000";
+    ctx.font = "24px 'Impact'";
+    ctx.fillText("SCORE: " + score, 20, 40);
+
+    if (gameOver) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Cartel de GAME OVER estilo cómic pop-art
+        ctx.fillStyle = "#ffeb3b";
+        ctx.fillRect(250, 90, 300, 110);
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = "#000000";
+        ctx.strokeRect(250, 90, 300, 110);
+
+        ctx.fillStyle = "#e91e63";
+        ctx.font = "40px 'Impact'";
+        ctx.textAlign = "center";
+        ctx.fillText("¡FIN DEL JUEGO!", canvas.width / 2, 140);
+        
+        ctx.fillStyle = "#000000";
+        ctx.font = "18px 'Arial Black'";
+        ctx.fillText("TOCA PARA REINICIAR", canvas.width / 2, 180);
+        ctx.textAlign = "start"; // Reset
+    }
+
+    requestAnimationFrame(update);
+}
+
+// Iniciar el juego
+update();
+</script>
+
+</body>
+</html>
