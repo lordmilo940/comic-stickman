@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Comic Stickman - Arcade Edition</title>
+    <title>Comic Stickman - Skins Edition</title>
     <style>
         body { margin: 0; background-color: #0d1117; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Impact', sans-serif; overflow: hidden; }
-        #gameContainer { text-align: center; }
+        #gameContainer { text-align: center; position: relative; }
         canvas { background-color: #1a1c2e; border: 6px solid #000000; box-shadow: 8px 8px 0px #ffcc00; display: block; }
         .instructions { margin-top: 15px; font-size: 20px; text-transform: uppercase; color: #ffffff; }
     </style>
@@ -14,66 +14,178 @@
 <body>
 <div id="gameContainer">
     <canvas id="gameCanvas" width="800" height="300"></canvas>
-    <div class="instructions">Presiona ESPACIO o TOCA LA PANTALLA para Saltar</div>
+    <div class="instructions">Usa ESPACIO o TOCA LA PANTALLA para saltar / interactuar</div>
 </div>
 <script>
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-let score = 0; 
-let gameOver = false; 
-let gameSpeed = 5;
-// Cargar el récord máximo desde la memoria del navegador
+// Estados del juego: 'MENU' o 'PLAYING'
+let gameState = 'MENU'; 
+let score = 0; let gameOver = false; let gameSpeed = 5;
 let highScore = localStorage.getItem("stickmanHighScore") ? parseInt(localStorage.getItem("stickmanHighScore")) : 0;
+
+// Configuración de Skins
+let currentSkin = 'clasico'; // 'clasico', 'anteojos', 'mono', 'gorra'
+const skinsList = ['clasico', 'anteojos', 'mono', 'gorra'];
+let skinNames = { clasico: "CLASICO", anteojos: "FRIKI (DIENTES)", mono: "ELEGANTE", gorra: "GAMER" };
+let selectedSkinIndex = 0;
 
 const stickman = { x: 80, y: 200, width: 30, height: 60, vy: 0, gravity: 0.6, jumpForce: -12, isGrounded: false };
 let obstacles = []; let spawnTimer = 0; let waterAnimationTimer = 0; let lastHitObstacle = null;
 const buildings = [{x: 50, w: 80, h: 150}, {x: 200, w: 120, h: 200}, {x: 400, w: 70, h: 120}, {x: 550, w: 100, h: 180}, {x: 750, w: 90, h: 160}];
 
-// Sintetizador de sonido de 8 bits integrado
+// Botones del menú (Cajas de colisión para clics/toques)
+const btnPlay = { x: 450, y: 120, w: 220, h: 50 };
+const btnSkinNext = { x: 190, y: 235, w: 40, h: 30 };
+const btnSkinPrev = { x: 50, y: 235, w: 40, h: 30 };
+
+// Sintetizador de audio integrado
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playSound(type) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
     osc.connect(gain); gain.connect(audioCtx.destination);
-
     if (type === 'jump') {
-        osc.type = 'triangle'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.15);
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(150, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.15);
         gain.gain.setValueAtTime(0.15, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
         osc.start(); osc.stop(audioCtx.currentTime + 0.15);
     } else if (type === 'hit') {
-        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, audioCtx.currentTime);
-        osc.frequency.linearRampToValueAtTime(60, audioCtx.currentTime + 0.3);
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(60, audioCtx.currentTime + 0.3);
         gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
         osc.start(); osc.stop(audioCtx.currentTime + 0.3);
-    } else if (type === 'highscore') {
-        osc.type = 'square'; osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-        osc.frequency.setValueAtTime(600, audioCtx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.25);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.25);
+    } else if (type === 'click') {
+        osc.type = 'sine'; osc.frequency.setValueAtTime(300, audioCtx.currentTime); osc.frequency.setValueAtTime(450, audioCtx.currentTime + 0.05);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
     }
 }
 
-window.addEventListener("keydown", (e) => { if (e.code === "Space") jump(); });
-canvas.addEventListener("touchstart", jump);
+// Controles del Teclado
+window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") {
+        if (gameState === 'MENU') {
+            startGame();
+        } else {
+            jump();
+        }
+    }
+});
 
-function jump() { 
-    if (stickman.isGrounded && !gameOver) { 
-        stickman.vy = stickman.jumpForce; stickman.isGrounded = false; 
-        playSound('jump'); // Sonido de salto
-    } 
-    if (gameOver) { resetGame(); } 
+// Controles para Mouse y Pantallas Táctiles
+canvas.addEventListener("mousedown", handleInteraction);
+canvas.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    processClick(x, y);
+});
+
+function handleInteraction(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    processClick(x, y);
 }
 
-function resetGame() { score = 0; obstacles = []; gameSpeed = 5; gameOver = false; waterAnimationTimer = 0; lastHitObstacle = null; stickman.y = 200; stickman.vy = 0; }
+function processClick(x, y) {
+    if (gameState === 'MENU') {
+        // Clic en JUGAR
+        if (x >= btnPlay.x && x <= btnPlay.x + btnPlay.w && y >= btnPlay.y && y <= btnPlay.y + btnPlay.h) {
+            playSound('click'); startGame();
+        }
+        // Clic flecha Siguiente Skin
+        if (x >= btnSkinNext.x && x <= btnSkinNext.x + btnSkinNext.w && y >= btnSkinNext.y && y <= btnSkinNext.y + btnSkinNext.h) {
+            playSound('click'); selectedSkinIndex = (selectedSkinIndex + 1) % skinsList.length; currentSkin = skinsList[selectedSkinIndex];
+        }
+        // Clic flecha Anterior Skin
+        if (x >= btnSkinPrev.x && x <= btnSkinPrev.x + btnSkinPrev.w && y >= btnSkinPrev.y && y <= btnSkinPrev.y + btnSkinPrev.h) {
+            playSound('click'); selectedSkinIndex = (selectedSkinIndex - 1 + skinsList.length) % skinsList.length; currentSkin = skinsList[selectedSkinIndex];
+        }
+    } else {
+        jump();
+    }
+}
+
+function startGame() { gameState = 'PLAYING'; resetGame(); }
+function jump() { if (stickman.isGrounded && !gameOver) { stickman.vy = stickman.jumpForce; stickman.isGrounded = false; playSound('jump'); } if (gameOver) { gameState = 'MENU'; } }
+function resetGame() { score = 0; obstacles = []; gameSpeed = 5; gameOver = false; waterAnimationTimer = 0; lastHitObstacle = null; stickman.y = 200; stickman.vy = 0; }function drawStickmanVisual(cx, cy, skin, isGroundedRef, animScore) {
+    ctx.lineWidth = 4; ctx.strokeStyle = "#000000";
+    
+    // Cabeza Blanca
+    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    // Ojos base negros
+    ctx.fillStyle = "#000000"; ctx.beginPath();
+    ctx.arc(cx + 4, cy - 3, 2, 0, Math.PI * 2); ctx.arc(cx - 2, cy - 3, 2, 0, Math.PI * 2); ctx.fill();
+
+    // Boca base dinámica
+    ctx.beginPath();
+    if (gameOver && gameState === 'PLAYING') { ctx.moveTo(cx - 4, cy + 4); ctx.lineTo(cx + 4, cy + 2); }
+    else if (isGroundedRef) { ctx.arc(cx + 1, cy + 3, 4, 0, Math.PI); }
+    else { ctx.arc(cx + 1, cy + 4, 3, 0, Math.PI * 2); }
+    ctx.stroke();
+
+    // --- ACCESORIOS DE SKINS ---
+    if (skin === 'anteojos') {
+        // Anteojos negros de pasta estilo cómic
+        ctx.lineWidth = 3; ctx.strokeStyle = "#000000";
+        ctx.strokeRect(cx - 5, cy - 6, 6, 6); ctx.strokeRect(cx + 2, cy - 6, 6, 6);
+        ctx.beginPath(); ctx.moveTo(cx + 1, cy - 3); ctx.lineTo(cx + 2, cy - 3); ctx.stroke();
+        // Dos dientes blancos saliendo de la boca
+        ctx.fillStyle = "#FFFFFF"; ctx.lineWidth = 2;
+        ctx.fillRect(cx - 2, cy + 4, 2, 4); ctx.fillRect(cx, cy + 4, 2, 4);
+        ctx.strokeRect(cx - 2, cy + 4, 2, 4); ctx.strokeRect(cx, cy + 4, 2, 4);
+    } else if (skin === 'mono') {
+        // Moño rojo en el cuello
+        ctx.fillStyle = "#ff1744"; ctx.lineWidth = 2; ctx.strokeStyle = "#000000";
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + 12); ctx.lineTo(cx - 8, cy + 8); ctx.lineTo(cx - 8, cy + 16); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + 12); ctx.lineTo(cx + 8, cy + 8); ctx.lineTo(cx + 8, cy + 16); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy + 12, 3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    } else if (skin === 'gorra') {
+        // Gorra con visera verde
+        ctx.fillStyle = "#00c853"; ctx.lineWidth = 2; ctx.strokeStyle = "#000000";
+        // Cúpula de la gorra
+        ctx.beginPath(); ctx.arc(cx, cy - 6, 12, Math.PI, 0); ctx.fill(); ctx.stroke();
+        // Visera hacia la derecha
+        ctx.fillRect(cx, cy - 8, 18, 3); ctx.strokeRect(cx, cy - 8, 18, 3);
+    }
+
+    // Cuerpo común negro grueso
+    ctx.lineWidth = 4; ctx.strokeStyle = "#000000"; ctx.fillStyle = "#000000";
+    ctx.beginPath(); ctx.moveTo(cx, cy + 12); ctx.lineTo(cx, cy + 35); ctx.stroke();
+
+    // Brazos común
+    ctx.beginPath();
+    if (gameOver && gameState === 'PLAYING') { ctx.moveTo(cx, cy + 15); ctx.lineTo(cx - 8, cy + 30); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx + 8, cy + 30); }
+    else if (isGroundedRef) {
+        let armWave = Math.sin(animScore * 0.15) * 10;
+        ctx.moveTo(cx, cy + 15); ctx.lineTo(cx - 10, cy + 25 + armWave); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx + 15, cy + 25 - armWave);
+    } else { ctx.moveTo(cx, cy + 15); ctx.lineTo(cx - 12, cy); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx + 12, cy); }
+    ctx.stroke();
+
+    // Piernas común
+    ctx.beginPath();
+    if (gameOver && gameState === 'PLAYING') { ctx.moveTo(cx, cy + 35); ctx.lineTo(cx - 5, cy + 60); ctx.moveTo(cx, cy + 35); ctx.lineTo(cx + 5, cy + 60); }
+    else if (isGroundedRef) {
+        let legMove = Math.sin(animScore * 0.2) * 15;
+        ctx.moveTo(cx, cy + 35); ctx.lineTo(cx - 10 + legMove, cy + 60); ctx.moveTo(cx, cy + 35); ctx.lineTo(cx + 10 - legMove, cy + 60);
+    } else { ctx.moveTo(cx, cy + 35); ctx.lineTo(cx - 8, cy + 50); ctx.moveTo(cx, cy + 35); ctx.lineTo(cx + 12, cy + 48); }
+    ctx.stroke();
+}
 
 function update() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // --- 1. DIBUJAR EDIFICIOS DE FONDO ---
     ctx.fillStyle = "#2d3250"; 
     buildings.forEach(b => {
-        b.x -= gameSpeed * 0.2; if (b.x + b.w < 0) b.x = canvas.width;
+        if (gameState === 'PLAYING' && !gameOver) b.x -= gameSpeed * 0.2;
+        if (b.x + b.w < 0) b.x = canvas.width;
         ctx.fillRect(b.x, canvas.height - b.h, b.w, b.h);
         ctx.lineWidth = 3; ctx.strokeStyle = "#000000"; ctx.strokeRect(b.x, canvas.height - b.h, b.w, b.h);
         ctx.fillStyle = "#ffdf6d";
@@ -83,117 +195,81 @@ function update() {
         }
         ctx.fillStyle = "#2d3250"; 
     });
+
+    // Suelo
     ctx.fillStyle = "#14151f"; ctx.fillRect(0, 260, canvas.width, 40);
     ctx.beginPath(); ctx.moveTo(0, 260); ctx.lineTo(canvas.width, 260); ctx.lineWidth = 5; ctx.strokeStyle = "#000000"; ctx.stroke();
-    
-    if (!gameOver) {
-        stickman.vy += stickman.gravity; stickman.y += stickman.vy;
-        if (stickman.y >= 200) { stickman.y = 200; stickman.vy = 0; stickman.isGrounded = true; }
-        spawnTimer++;
-        if (spawnTimer > Math.random() * 40 + 65) {
-            let type = "hydrant"; if (score > 800) { type = Math.random() > 0.4 ? "hydrant" : "dog"; }
-            if (type === "hydrant") { obstacles.push({ type: "hydrant", x: canvas.width, y: 215, width: 26, height: 45 }); }
-            else { obstacles.push({ type: "dog", x: canvas.width, y: 230, width: 35, height: 30, speedBonus: 2 }); }
-            spawnTimer = 0;
-        }
-        score++; if (score % 500 === 0) gameSpeed += 1;
-    } ctx.lineWidth = 4; ctx.strokeStyle = "#000000";
-    let cx = stickman.x + 15; let cy = stickman.y + 15;
-    ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = "#000000"; ctx.beginPath(); ctx.arc(cx + 4, cy - 3, 2, 0, Math.PI * 2); ctx.arc(cx - 2, cy - 3, 2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath();
-    if (gameOver) { ctx.moveTo(cx - 4, cy + 4); ctx.lineTo(cx + 4, cy + 2); }
-    else if (stickman.isGrounded) { ctx.arc(cx + 1, cy + 3, 4, 0, Math.PI); }
-    else { ctx.arc(cx + 1, cy + 4, 3, 0, Math.PI * 2); }
-    ctx.stroke();
-    ctx.fillStyle = "#000000"; ctx.beginPath(); ctx.moveTo(cx, cy + 12); ctx.lineTo(cx, cy + 35); ctx.stroke();
-    ctx.beginPath();
-    if (gameOver) { ctx.moveTo(cx, cy + 15); ctx.lineTo(cx - 8, cy + 30); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx + 8, cy + 30); }
-    else if (stickman.isGrounded) {
-        let armWave = Math.sin(score * 0.15) * 10;
-        ctx.moveTo(cx, cy + 15); ctx.lineTo(cx - 10, cy + 25 + armWave); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx + 15, cy + 25 - armWave);
-    } else { ctx.moveTo(cx, cy + 15); ctx.lineTo(cx - 12, cy); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx + 12, cy); }
-    ctx.stroke();
-    ctx.beginPath();
-    if (gameOver) { ctx.moveTo(cx, cy + 35); ctx.lineTo(cx - 5, cy + 60); ctx.moveTo(cx, cy + 35); ctx.lineTo(cx + 5, cy + 60); }
-    else if (stickman.isGrounded) {
-        let legMove = Math.sin(score * 0.2) * 15;
-        ctx.moveTo(cx, cy + 35); ctx.lineTo(cx - 10 + legMove, cy + 60); ctx.moveTo(cx, cy + 35); ctx.lineTo(cx + 10 - legMove, cy + 60);
-    } else { ctx.moveTo(cx, cy + 35); ctx.lineTo(cx - 8, cy + 50); ctx.moveTo(cx, cy + 35); ctx.lineTo(cx + 12, cy + 48); }
-    ctx.stroke();
 
-    obstacles.forEach((obs, index) => {
-        if (!gameOver) { obs.x -= gameSpeed + (obs.type === "dog" ? obs.speedBonus : 0); }
-        ctx.lineWidth = 3; ctx.strokeStyle = "#000000";
-        if (obs.type === "hydrant") {
-            ctx.fillStyle = "#d32f2f"; ctx.fillRect(obs.x + 3, obs.y + 10, obs.width - 6, obs.height - 10); ctx.strokeRect(obs.x + 3, obs.y + 10, obs.width - 6, obs.height - 10);
-            ctx.beginPath(); ctx.arc(obs.x + obs.width / 2, obs.y + 10, obs.width / 2 - 2, Math.PI, 0); ctx.fill(); ctx.stroke();
-            ctx.fillStyle = "#fbc02d"; ctx.fillRect(obs.x + obs.width / 2 - 3, obs.y, 6, 4); ctx.strokeRect(obs.x + obs.width / 2 - 3, obs.y, 6, 4);
-            ctx.fillRect(obs.x, obs.y + 18, 4, 8); ctx.strokeRect(obs.x, obs.y + 18, 4, 8);
-            ctx.fillRect(obs.x + obs.width - 4, obs.y + 18, 4, 8); ctx.strokeRect(obs.x + obs.width - 4, obs.y + 18, 4, 8);
-            ctx.fillRect(obs.x + obs.width / 2 - 4, obs.y + 20, 8, 8); ctx.strokeRect(obs.x + obs.width / 2 - 4, obs.y + 20, 8, 8);
-            ctx.fillStyle = "#555555"; ctx.fillRect(obs.x, obs.y + obs.height - 5, obs.width, 5); ctx.strokeRect(obs.x, obs.y + obs.height - 5, obs.width, 5);
-        } else if (obs.type === "dog") {
-            ctx.fillStyle = "#1e1e24"; ctx.fillRect(obs.x + 5, obs.y + 10, 24, 14); ctx.strokeRect(obs.x + 5, obs.y + 10, 24, 14);
-            ctx.fillRect(obs.x, obs.y + 4, 10, 10); ctx.strokeRect(obs.x, obs.y + 4, 10, 10);
-            ctx.beginPath(); ctx.moveTo(obs.x + 6, obs.y + 4); ctx.lineTo(obs.x + 9, obs.y); ctx.lineTo(obs.x + 10, obs.y + 4); ctx.fill(); ctx.stroke();
-            ctx.fillStyle = "#ff1744"; ctx.fillRect(obs.x + 3, obs.y + 6, 2, 2); ctx.fillStyle = "#1e1e24";
-            ctx.beginPath(); ctx.moveTo(obs.x + 29, obs.y + 12); ctx.lineTo(obs.x + 35, obs.y + 5); ctx.lineWidth = 4; ctx.stroke(); ctx.lineWidth = 3; 
-            let legCycle = Math.sin(score * 0.3) * 6;
-            ctx.beginPath(); ctx.moveTo(obs.x + 8, obs.y + 24); ctx.lineTo(obs.x + 6 + legCycle, obs.y + 30); ctx.moveTo(obs.x + 24, obs.y + 24); ctx.lineTo(obs.x + 26 - legCycle, obs.y + 30); ctx.stroke();
-        }
-        if (obs.x + obs.width < 0) obstacles.splice(index, 1);
-        if (stickman.x < obs.x + obs.width && stickman.x + stickman.width > obs.x && stickman.y < obs.y + obs.height && stickman.y + stickman.height > obs.y) {
-            gameOver = true; 
-            if (!lastHitObstacle) {
-                lastHitObstacle = obs;
-                playSound('hit'); // Sonido de golpe
-                // Verificar si superamos el récord máximo al perder
-                if (score > highScore) {
-                    highScore = score;
-                    localStorage.setItem("stickmanHighScore", highScore);
-                    setTimeout(() => playSound('highscore'), 350); // Sonido de nuevo récord victorioso
-                }
+    if (gameState === 'MENU') {
+        // --- MENÚ DE INICIO POP-ART ---
+        ctx.fillStyle = "rgba(13, 17, 23, 0.5)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Título del juego
+        ctx.fillStyle = "#ffcc00"; ctx.font = "46px 'Impact'"; ctx.strokeStyle = "#000000"; ctx.lineWidth = 6;
+        ctx.strokeText("STICKMAN RUNNER", 60, 80); ctx.fillText("STICKMAN RUNNER", 60, 80);
+
+        // Subtítulo de High Score
+        ctx.fillStyle = "#00e676"; ctx.font = "20px 'Impact'";
+        ctx.fillText("RECORD MAXIMO: " + highScore, 60, 115);
+
+        // Cuadro de Selector de Skins (Lado izquierdo)
+        ctx.fillStyle = "#282a36"; ctx.fillRect(40, 140, 200, 110);
+        ctx.lineWidth = 4; ctx.strokeStyle = "#000000"; ctx.strokeRect(40, 140, 200, 110);
+
+        // Botón flecha izquierda (<)
+        ctx.fillStyle = "#ffeb3b"; ctx.fillRect(btnSkinPrev.x, btnSkinPrev.y, btnSkinPrev.w, btnSkinPrev.h); ctx.strokeRect(btnSkinPrev.x, btnSkinPrev.y, btnSkinPrev.w, btnSkinPrev.h);
+        ctx.fillStyle = "#000000"; ctx.font = "20px 'Impact'"; ctx.fillText("<", btnSkinPrev.x + 15, btnSkinPrev.y + 22);
+
+        // Botón flecha derecha (>)
+        ctx.fillStyle = "#ffeb3b"; ctx.fillRect(btnSkinNext.x, btnSkinNext.y, btnSkinNext.w, btnSkinNext.h); ctx.strokeRect(btnSkinNext.x, btnSkinNext.y, btnSkinNext.w, btnSkinNext.h);
+        ctx.fillStyle = "#000000"; ctx.fillText(">", btnSkinNext.x + 15, btnSkinNext.y + 22);
+
+        // Texto de Skin Seleccionada
+        ctx.fillStyle = "#ffffff"; ctx.font = "14px 'Arial Black'"; ctx.textAlign = "center";
+        ctx.fillText(skinNames[currentSkin], 140, 225); ctx.textAlign = "start";
+
+        // Previsualización del Stickman con la Skin elegida en el menú
+        drawStickmanVisual(125, 145, currentSkin, true, Date.now() * 0.05);
+
+        // Botón JUGAR grande
+        ctx.fillStyle = "#ff1744"; ctx.fillRect(btnPlay.x, btnPlay.y, btnPlay.w, btnPlay.h);
+        ctx.lineWidth = 5; ctx.strokeStyle = "#000000"; ctx.strokeRect(btnPlay.x, btnPlay.y, btnPlay.w, btnPlay.h);
+        ctx.fillStyle = "#ffffff"; ctx.font = "28px 'Impact'"; ctx.fillText("¡PRESIONA JUGAR!", btnPlay.x + 25, btnPlay.y + 35);
+
+    } else if (gameState === 'PLAYING') {
+        // --- MODO DE JUEGO ACTIVO ---
+        if (!gameOver) {
+            stickman.vy += stickman.gravity; stickman.y += stickman.vy;
+            if (stickman.y >= 200) { stickman.y = 200; stickman.vy = 0; stickman.isGrounded = true; }
+            spawnTimer++;
+            if (spawnTimer > Math.random() * 40 + 65) {
+                let type = "hydrant"; if (score > 800) { type = Math.random() > 0.4 ? "hydrant" : "dog"; }
+                if (type === "hydrant") { obstacles.push({ type: "hydrant", x: canvas.width, y: 215, width: 26, height: 45 }); }
+                else { obstacles.push({ type: "dog", x: canvas.width, y: 230, width: 35, height: 30, speedBonus: 2 }); }
+                spawnTimer = 0;
             }
+            score++; if (score % 500 === 0) gameSpeed += 1;
         }
-    });
 
-    if (gameOver && lastHitObstacle && lastHitObstacle.type === "hydrant") {
-        waterAnimationTimer += 4; let hx = lastHitObstacle.x + lastHitObstacle.width / 2; let hy = lastHitObstacle.y;
-        ctx.fillStyle = "#29b6f6"; ctx.strokeStyle = "#000000"; ctx.lineWidth = 4;
-        let jetHeight = Math.min(waterAnimationTimer, 180); ctx.fillRect(hx - 8, hy - jetHeight, 16, jetHeight); ctx.strokeRect(hx - 8, hy - jetHeight, 16, jetHeight);
-        ctx.fillStyle = "#e0f7fa"; ctx.beginPath(); ctx.arc(hx, hy - jetHeight, 14, 0, Math.PI * 2); ctx.arc(hx - 10, hy - jetHeight + 10, 8, 0, Math.PI * 2); ctx.arc(hx + 10, hy - jetHeight + 10, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    }
+        // Dibujar al Stickman corriendo con la Skin elegida
+        drawStickmanVisual(stickman.x, stickman.y, currentSkin, stickman.isGrounded, score);
 
-    // Dibujar Marcador Actual y Récord Máximo arriba
-    ctx.fillStyle = "#ffcc00"; ctx.font = "24px 'Impact'";
-    ctx.fillText("SCORE: " + score, 20, 40);
-    ctx.fillStyle = "#00e676"; // Color verde neón para el récord
-    ctx.fillText("HI-SCORE: " + highScore, 630, 40);
-
-    if (!gameOver && score > 600 && score < 800) { ctx.fillStyle = "#ff1744"; ctx.font = "20px 'Impact'"; ctx.fillText("¡CUIDADO! SE ACERCAN LOS PERROS...", canvas.width / 2 - 130, 40); }
-    
-    if (gameOver) {
-        ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#ffeb3b"; ctx.fillRect(210, 90, 380, 120); ctx.lineWidth = 5; ctx.strokeStyle = "#000000"; ctx.strokeRect(210, 90, 380, 120);
-        ctx.fillStyle = "#e91e63"; ctx.font = "36px 'Impact'"; ctx.textAlign = "center";
-        
-        if (score >= highScore && score > 0) {
-            ctx.fillText("¡NUEVO RÉCORD MÁXIMO!", canvas.width / 2, 135);
-        } else if (lastHitObstacle && lastHitObstacle.type === "dog") {
-            ctx.fillText("¡TE ATRAPÓ EL PERRO!", canvas.width / 2, 135);
-        } else {
-            ctx.fillText("¡FIN DEL JUEGO!", canvas.width / 2, 135);
-        }
-        
-        ctx.fillStyle = "#000000"; ctx.font = "18px 'Arial Black'";
-        ctx.fillText("TU SCORE: " + score, canvas.width / 2, 165);
-        ctx.fillText("TOCA PARA REINICIAR", canvas.width / 2, 195);
-        ctx.textAlign = "start";
-    }
-    requestAnimationFrame(update);
-}
-update();
-</script>
-</body>
-</html>
+        // Actualizar y dibujar obstáculos
+        obstacles.forEach((obs, index) => {
+            if (!gameOver) obs.x -= gameSpeed + (obs.type === "dog" ? obs.speedBonus : 0);
+            ctx.lineWidth = 3; ctx.strokeStyle = "#000000";
+            if (obs.type === "hydrant") {
+                ctx.fillStyle = "#d32f2f"; ctx.fillRect(obs.x + 3, obs.y + 10, obs.width - 6, obs.height - 10); ctx.strokeRect(obs.x + 3, obs.y + 10, obs.width - 6, obs.height - 10);
+                ctx.beginPath(); ctx.arc(obs.x + obs.width / 2, obs.y + 10, obs.width / 2 - 2, Math.PI, 0); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = "#fbc02d"; ctx.fillRect(obs.x + obs.width / 2 - 3, obs.y, 6, 4); ctx.strokeRect(obs.x + obs.width / 2 - 3, obs.y, 6, 4);
+                ctx.fillRect(obs.x, obs.y + 18, 4, 8); ctx.strokeRect(obs.x, obs.y + 18, 4, 8);
+                ctx.fillRect(obs.x + obs.width - 4, obs.y + 18, 4, 8); ctx.strokeRect(obs.x + obs.width - 4, obs.y + 18, 4, 8);
+                ctx.fillRect(obs.x + obs.width / 2 - 4, obs.y + 20, 8, 8); ctx.strokeRect(obs.x + obs.width / 2 - 4, obs.y + 20, 8, 8);
+                ctx.fillStyle = "#555555"; ctx.fillRect(obs.x, obs.y + obs.height - 5, obs.width, 5); ctx.strokeRect(obs.x, obs.y + obs.height - 5, obs.width, 5);
+            } else if (obs.type === "dog") {
+                ctx.fillStyle = "#1e1e24"; ctx.fillRect(obs.x + 5, obs.y + 10, 24, 14); ctx.strokeRect(obs.x + 5, obs.y + 10, 24, 14);
+                ctx.fillRect(obs.x, obs.y + 4, 10, 10); ctx.strokeRect(obs.x, obs.y + 4, 10, 10);
+                ctx.beginPath(); ctx.moveTo(obs.x + 6, obs.y + 4); ctx.lineTo(obs.x + 9, obs.y); ctx.lineTo(obs.x + 10, obs.y + 4); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = "#ff1744"; ctx.fillRect(obs.x + 3, obs.y + 6, 2, 2); ctx.fillStyle = "#1e1e24";
+                ctx.beginPath(); ctx.moveTo(obs.x + 29, obs.y + 12); ctx.lineTo(obs.x + 35, obs.y + 5); ctx.lineWidth = 4; ctx.stroke(); ctx.lineWidth = 3; 
+                let legCycle = Math.sin(score * 0.3) * 6;ctx.beginPath(); ctx.moveTo(obs.x + 8, obs.y + 24); ctx.lineTo(obs.x + 6 + legCycle, obs.y + 30); ctx.moveTo(obs.x + 24, obs.y + 24); ctx.lineTo(obs.x + 26 - legCycle, obs.y + 30); ctx.stroke();}if (obs.x + obs.width < 0) obstacles.splice(index, 1);if (stickman.x < obs.x + obs.width && stickman.x + stickman.width > obs.x && stickman.y < obs.y + obs.height && stickman.y + stickman.height > obs.y) {gameOver = true;if (!lastHitObstacle) {lastHitObstacle = obs; playSound('hit');if (score > highScore) { highScore = score; localStorage.setItem("stickmanHighScore", highScore); }}}});if (gameOver && lastHitObstacle && lastHitObstacle.type === "hydrant") {waterAnimationTimer += 4; let hx = lastHitObstacle.x + lastHitObstacle.width / 2; let hy = lastHitObstacle.y;ctx.fillStyle = "#29b6f6"; ctx.strokeStyle = "#000000"; ctx.lineWidth = 4;let jetHeight = Math.min(waterAnimationTimer, 180); ctx.fillRect(hx - 8, hy - jetHeight, 16, jetHeight); ctx.strokeRect(hx - 8, hy - jetHeight, 16, jetHeight);ctx.fillStyle = "#e0f7fa"; ctx.beginPath(); ctx.arc(hx, hy - jetHeight, 14, 0, Math.PI * 2); ctx.arc(hx - 10, hy - jetHeight + 10, 8, 0, Math.PI * 2); ctx.arc(hx + 10, hy - jetHeight + 10, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();}ctx.fillStyle = "#ffcc00"; ctx.font = "24px 'Impact'"; ctx.fillText("SCORE: " + score, 20, 40);ctx.fillStyle = "#00e676"; ctx.fillText("HI-SCORE: " + highScore, 630, 40);if (!gameOver && score > 600 && score < 800) { ctx.fillStyle = "#ff1744"; ctx.font = "20px 'Impact'"; ctx.fillText("¡CUIDADO! SE ACERCAN LOS PERROS...", canvas.width / 2 - 130, 40); }if (gameOver) {ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; ctx.fillRect(0, 0, canvas.width, canvas.height);ctx.fillStyle = "#ffeb3b"; ctx.fillRect(210, 90, 380, 120); ctx.lineWidth = 5; ctx.strokeStyle = "#000000"; ctx.strokeRect(210, 90, 380, 120);ctx.fillStyle = "#e91e63"; ctx.font = "36px 'Impact'"; ctx.textAlign = "center";if (lastHitObstacle && lastHitObstacle.type === "dog") { ctx.fillText("¡TE ATRAPÓ EL PERRO!", canvas.width / 2, 135); }else { ctx.fillText("¡FIN DEL JUEGO!", canvas.width / 2, 135); }ctx.fillStyle = "#000000"; ctx.font = "18px 'Arial Black'"; ctx.fillText("TU SCORE: " + score, canvas.width / 2, 165); ctx.fillText("TOCA PARA VOLVER AL MENU", canvas.width / 2, 195); ctx.textAlign = "start";}}requestAnimationFrame(update);}update();
