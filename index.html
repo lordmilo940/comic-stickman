@@ -35,10 +35,22 @@ function playSound(type) {
     if (type === 'jump') { osc.type = 'triangle'; osc.frequency.setValueAtTime(150, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.15); gain.gain.setValueAtTime(0.15, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15); osc.start(); osc.stop(audioCtx.currentTime + 0.15); }
     else if (type === 'hit') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(300, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(60, audioCtx.currentTime + 0.3); gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3); osc.start(); osc.stop(audioCtx.currentTime + 0.3); }
     else if (type === 'click') { osc.type = 'sine'; osc.frequency.setValueAtTime(300, audioCtx.currentTime); osc.frequency.setValueAtTime(450, audioCtx.currentTime + 0.05); gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1); osc.start(); osc.stop(audioCtx.currentTime + 0.1); }
-}window.addEventListener("keydown", (e) => { if (e.code === "Space") { if (gameState === 'MENU') { startGame(); } else { jump(); } } });
+window.addEventListener("keydown", (e) => { if (e.code === "Space") { if (gameState === 'MENU') { startGame(); } else { jump(); } } });
+
+// NUEVOS CONTROLES CORREGIDOS PARA CELULAR Y MOUSE
 canvas.addEventListener("mousedown", handleInteraction);
-canvas.addEventListener("touchstart", (e) => { e.preventDefault(); const rect = canvas.getBoundingClientRect(); const touch = e.touches; processClick(touch.clientX - rect.left, touch.clientY - rect.top); });
-function handleInteraction(e) { const rect = canvas.getBoundingClientRect(); processClick(e.clientX - rect.left, e.clientY - rect.top); }
+canvas.addEventListener("touchstart", (e) => { 
+    e.preventDefault(); 
+    const rect = canvas.getBoundingClientRect(); 
+    const touch = e.touches[0]; 
+    processClick(touch.clientX - rect.left, touch.clientY - rect.top); 
+}, { passive: false });
+
+function handleInteraction(e) { 
+    const rect = canvas.getBoundingClientRect(); 
+    processClick(e.clientX - rect.left, e.clientY - rect.top); 
+}
+
 function processClick(x, y) {
     if (gameState === 'MENU') {
         if (x >= btnPlay.x && x <= btnPlay.x + btnPlay.w && y >= btnPlay.y && y <= btnPlay.y + btnPlay.h) { playSound('click'); startGame(); }
@@ -59,6 +71,7 @@ function drawSkin(cx, cy, skin, grounded, anim) {
     ctx.lineWidth = 4; ctx.strokeStyle = "#000000"; ctx.fillStyle = "#000000"; ctx.beginPath(); ctx.moveTo(cx, cy + 12); ctx.lineTo(cx, cy + 35); ctx.stroke();
     ctx.beginPath(); if (gameOver && gameState === 'PLAYING') { ctx.moveTo(cx, cy + 15); ctx.lineTo(cx - 8, cy + 30); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx + 8, cy + 30); } else if (grounded) { let wave = Math.sin(anim * 0.15) * 10; ctx.moveTo(cx, cy + 15); ctx.lineTo(cx - 10, cy + 25 + wave); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx + 15, cy + 25 - wave); } else { ctx.moveTo(cx, cy + 15); ctx.lineTo(cx - 12, cy); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx + 12, cy); } ctx.stroke();
     ctx.beginPath(); if (gameOver && gameState === 'PLAYING') { ctx.moveTo(cx, cy + 35); ctx.lineTo(cx - 5, cy + 60); ctx.moveTo(cx, cy + 35); ctx.lineTo(cx + 5, cy + 60); } else if (grounded) { let step = Math.sin(anim * 0.2) * 15; ctx.moveTo(cx, cy + 35); ctx.lineTo(cx - 10 + step, cy + 60); ctx.moveTo(cx, cy + 35); ctx.lineTo(cx + 10 - step, cy + 60); } else { ctx.moveTo(cx, cy + 35); ctx.lineTo(cx - 8, cy + 50); ctx.moveTo(cx, cy + 35); ctx.lineTo(cx + 12, cy + 48); } ctx.stroke();
+}To(cx, cy + 35); ctx.lineTo(cx + 5, cy + 60); } else if (grounded) { let step = Math.sin(anim * 0.2) * 15; ctx.moveTo(cx, cy + 35); ctx.lineTo(cx - 10 + step, cy + 60); ctx.moveTo(cx, cy + 35); ctx.lineTo(cx + 10 - step, cy + 60); } else { ctx.moveTo(cx, cy + 35); ctx.lineTo(cx - 8, cy + 50); ctx.moveTo(cx, cy + 35); ctx.lineTo(cx + 12, cy + 48); } ctx.stroke();
 }function update() {
     ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#2d3250";
     buildings.forEach(b => { if (gameState === 'PLAYING' && !gameOver) b.x -= gameSpeed * 0.2; if (b.x + b.w < 0) b.x = canvas.width; ctx.fillRect(b.x, canvas.height - b.h, b.w, b.h); ctx.lineWidth = 3; ctx.strokeStyle = "#000000"; ctx.strokeRect(b.x, canvas.height - b.h, b.w, b.h); ctx.fillStyle = "#ffdf6d"; if (b.h > 140) { ctx.fillRect(b.x + 15, canvas.height - b.h + 20, 15, 15); ctx.fillRect(b.x + b.w - 30, canvas.height - b.h + 20, 15, 15); ctx.fillRect(b.x + 15, canvas.height - b.h + 60, 15, 15); ctx.fillRect(b.x + b.w - 30, canvas.height - b.h + 60, 15, 15); } ctx.fillStyle = "#2d3250"; });
